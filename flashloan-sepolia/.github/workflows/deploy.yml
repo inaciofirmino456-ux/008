@@ -2,13 +2,9 @@ name: Deploy Sepolia Flash Loan Test
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-sepolia]')
     runs-on: ubuntu-latest
     defaults:
       run:
