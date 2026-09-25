@@ -14,12 +14,10 @@ small{color:#aeb7c4}.ok{color:#6ee7b7}.err{color:#ff8f8f}
 </head>
 <body>
 <main>
-<h2>Aave Sepolia — Teste</h2>
-<p><small>Contrato: 0xa2127506309Ce12894b12b00029B01C9bffB6b32</small></p>
-<label>Quantidade de USDC (unidades mínimas)</label>
-<input id="amount" value="1" inputmode="numeric">
-<button id="connect">1. Conectar Rabby</button>
-<button id="loan" disabled>2. Executar Flash Loan</button>
+<h2>DISPARAR ARBITRAGEM</h2>
+<p><small>Sepolia • pronto para assinar no Rabby</small></p>
+<label>Quantidade de USDC (unidades mínimas)</label><input id="amount" value="1" inputmode="numeric">
+<button id="connect">CONECTAR E DISPARAR</button><button id="loan" disabled>ASSINAR GAS NO RABBY</button>
 <p id="status"><small>Primeiro conecta a carteira.</small></p>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.15.0/dist/ethers.umd.min.js"></script>
@@ -41,7 +39,8 @@ document.getElementById("connect").onclick=async()=>{
   const addr=await signer.getAddress();
   contract=new ethers.Contract(CONTRACT,ABI,signer);
   document.getElementById("loan").disabled=false;
-  setStatus("Ligado: "+addr.slice(0,6)+"..."+addr.slice(-4),"ok");
+  setStatus("Carteira ligada. A preparar a assinatura…","ok");
+  setTimeout(()=>document.getElementById("loan").click(),300);
  }catch(e){setStatus(e.shortMessage||e.message||String(e),"err")}
 };
 document.getElementById("loan").onclick=async()=>{
