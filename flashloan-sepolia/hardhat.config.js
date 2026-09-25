@@ -7,7 +7,7 @@ module.exports = {
   solidity: "0.8.20",
   networks: {
     sepolia: {
-      url: process.env.SEPOLIA_RPC_URL || "",
+      url: process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
       chainId: 11155111,
       accounts
     }
