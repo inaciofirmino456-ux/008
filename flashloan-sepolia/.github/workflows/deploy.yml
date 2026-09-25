@@ -2,21 +2,25 @@ name: Deploy Sepolia Flash Loan Test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-sepolia]')
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: flashloan-sepolia
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: flashloan-sepolia/package-lock.json
-      - run: npm ci
+
+      - run: npm install
       - run: npm run compile
       - run: npm run deploy
         env:
