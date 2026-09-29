@@ -60,28 +60,25 @@ async function removeAiImage(path){
 async function callAi(file,purpose,action){
   if(!file)return {error:"Escolhe primeiro uma foto."};
   const image=await compressImage(file);
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),145000);
-  try{
-    const response=await fetch(C.url+"/functions/v1/prepare-food-photo",{
-      method:"POST",
-      headers:{
-        "apikey":C.key,
-        "Content-Type":"application/json"
-      },
-      body:JSON.stringify({image,purpose,action}),
-      signal:controller.signal
-    });
-    const text=await response.text();
-    let data={};
-    try{data=JSON.parse(text)}catch{}
-    if(!response.ok)throw new Error(data.error||("A IA respondeu com erro "+response.status+"."));
+  const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error("A IA demorou demasiado tempo a responder. Tenta novamente com uma foto mais pequena.")),145000));
+  const request=sb.functions.invoke("prepare-food-photo",{
+    body:{image,purpose,action}
+  }).then(async({data,error})=>{
+    if(error){
+      let detail=error.message||"Erro ao contactar a função de IA.";
+      if(error.context&&typeof error.context.json==="function"){
+        try{const body=await error.context.json();if(body?.error)detail=body.error}catch{}
+      }
+      throw new Error(detail);
+    }
+    if(!data)throw new Error("A IA não devolveu resposta.");
+    if(data.error)throw new Error(data.error);
     return data;
-  }catch(e){
-    if(e.name==="AbortError")throw new Error("A IA demorou demasiado tempo a responder. Tenta novamente com uma foto mais pequena.");
-    if(e instanceof TypeError)throw new Error("Não foi possível contactar o serviço de IA. Verifica a internet e tenta novamente.");
+  }).catch(e=>{
+    if(e instanceof TypeError)throw new Error("Falha de rede ao contactar a IA. Verifica a ligação e tenta novamente.");
     throw e;
-  }finally{clearTimeout(timer)}
+  });
+  return await Promise.race([request,timeout]);
 }
 async function prepareWithAI(file,purpose,previewEl){
   if(!file)return alert("Escolhe primeiro uma foto.");
