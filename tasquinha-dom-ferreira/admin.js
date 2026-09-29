@@ -60,26 +60,27 @@ async function removeAiImage(path){
 async function callAi(file,purpose,action){
   if(!file)return {error:"Escolhe primeiro uma foto."};
   const image=await compressImage(file);
-  const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error("A IA demorou demasiado tempo a responder. Tenta novamente com uma foto mais pequena.")),145000));
-  const request=sb.functions.invoke("prepare-food-photo",{
-    body:{image,purpose,action}
-  }).then(async({data,error})=>{
-    if(error){
-      let detail=error.message||"Erro ao contactar a função de IA.";
-      if(error.context&&typeof error.context.json==="function"){
-        try{const body=await error.context.json();if(body?.error)detail=body.error}catch{}
-      }
-      throw new Error(detail);
-    }
-    if(!data)throw new Error("A IA não devolveu resposta.");
-    if(data.error)throw new Error(data.error);
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),145000);
+  try{
+    const response=await fetch(C.url+"/functions/v1/prepare-food-photo",{
+      method:"POST",
+      headers:{"Content-Type":"text/plain;charset=UTF-8"},
+      body:JSON.stringify({image,purpose,action}),
+      signal:controller.signal
+    });
+    const text=await response.text();
+    let data={};
+    try{data=JSON.parse(text)}catch{}
+    if(!response.ok)throw new Error(data.error||("A IA respondeu com erro "+response.status+"."));
     return data;
-  }).catch(e=>{
-    if(e instanceof TypeError)throw new Error("Falha de rede ao contactar a IA. Verifica a ligação e tenta novamente.");
+  }catch(e){
+    if(e.name==="AbortError")throw new Error("A IA demorou demasiado tempo a responder. Tenta novamente com uma foto mais pequena.");
+    if(e instanceof TypeError)throw new Error("Não foi possível contactar o serviço de IA. Verifica a internet e tenta novamente.");
     throw e;
-  });
-  return await Promise.race([request,timeout]);
+  }finally{clearTimeout(timer)}
 }
+
 async function prepareWithAI(file,purpose,previewEl){
   if(!file)return alert("Escolhe primeiro uma foto.");
   if(file.size>12*1024*1024)return alert("A foto é demasiado grande. Escolhe uma imagem até 12 MB.");
@@ -205,4 +206,49 @@ $("#deleteMenuPhoto").onclick=()=>deleteSelectedPhoto("menu");
 
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{localStorage.setItem("adminTab",b.dataset.tab);document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));$("#"+b.dataset.tab).classList.remove("hidden")});
 async function restoreAdminTab(){const tab=localStorage.getItem("adminTab")||"settings";const el=$("#"+tab);if(el){document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));el.classList.remove("hidden");}}
+
+const chatMessages=[];
+function addChatMessage(role,text){
+  chatMessages.push({role,content:text});
+  const box=$("#aiChatMessages");
+  const el=document.createElement("div");
+  el.className="aiChatMessage "+role;
+  el.textContent=text;
+  box.appendChild(el);
+  box.scrollTop=box.scrollHeight;
+}
+async function sendAiChat(){
+  const input=$("#aiChatInput"),btn=$("#aiChatSend");
+  const message=input.value.trim();
+  if(!message)return;
+  input.value="";
+  addChatMessage("user",message);
+  btn.disabled=true;btn.textContent="Aguarde…";
+  try{
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),90000);
+    try{
+      const response=await fetch(C.url+"/functions/v1/prepare-food-photo",{
+        method:"POST",
+        headers:{"Content-Type":"text/plain;charset=UTF-8"},
+        body:JSON.stringify({action:"chat",messages:chatMessages}),
+        signal:controller.signal
+      });
+      const text=await response.text();
+      let data={};try{data=JSON.parse(text)}catch{}
+      if(!response.ok)throw new Error(data.error||("A IA respondeu com erro "+response.status+"."));
+      if(!data.reply)throw new Error("A IA não devolveu uma resposta.");
+      addChatMessage("assistant",data.reply);
+    }finally{clearTimeout(timer)}
+  }catch(e){
+    addChatMessage("assistant","⚠️ "+(e.message||"Não foi possível contactar a IA."));
+  }finally{
+    btn.disabled=false;btn.textContent="Enviar";
+    input.focus();
+  }
+}
+$("#aiChatSend").onclick=sendAiChat;
+$("#aiChatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendAiChat()}});
+addChatMessage("assistant","Olá! Sou o assistente da área do dono. Posso ajudar com o prato do dia, menu, fotografias e conteúdo do site.");
+
 session();
