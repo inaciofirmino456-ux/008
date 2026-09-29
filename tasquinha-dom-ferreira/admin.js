@@ -1,11 +1,5 @@
 const C=window.TASQUINHA_SUPABASE;const sb=window.supabase.createClient(C.url,C.key);const SITE_URL=(C.siteUrl||location.origin).replace(/\/$/,"");const AUTH_REDIRECT=`${SITE_URL}/gestao-7f4c9a2d.html`;const $=s=>document.querySelector(s);let cats=[],items=[];
-async function session(){const r=await sb.auth.getSession();if(r.data.session){$("#auth").classList.add("hidden");$("#panel").classList.remove("hidden");$("#logout").classList.remove("hidden");await loadAll()}else{$("#auth").classList.remove("hidden");$("#panel").classList.add("hidden");$("#logout").classList.add("hidden")}}
-async function loadAll(){
- const r=await Promise.all([sb.from("restaurant_settings").select("*").limit(1).maybeSingle(),sb.from("menu_categories").select("*").order("sort_order"),sb.from("menu_items").select("*").order("sort_order"),sb.from("daily_dishes").select("*").order("dish_date",{ascending:false}),sb.from("gallery").select("*").order("sort_order"),sb.from("orders").select("*").order("created_at",{ascending:false})]);
- cats=r[1].data||[];items=r[2].data||[];const s=r[0].data;
- if(s){$("#sName").value=s.name||"";$("#sPhone").value=s.phone||"";$("#sWhatsApp").value=s.whatsapp||"";$("#sEmail").value=s.email||"";$("#sAdminEmail").value=s.admin_email||"";$("#sAddress").value=s.address||"";let hrs=s.hours;try{if(typeof hrs==="string"&&hrs.trim().startsWith('"'))hrs=JSON.parse(hrs)}catch{}$("#sHours").value=hrs||"";$("#sMaps").value=s.maps_url||""}
- $("#iCategory").innerHTML=cats.map(x=>"<option value='"+x.id+"'>"+x.name+"</option>").join("");renderMenu();renderDaily(r[3].data||[]);renderGallery(r[4].data||[]);renderOrders(r[5].data||[])
-}
+async function session(){ $("#panel").classList.remove("hidden"); await loadAll(); }
 function renderMenu(){const html=cats.map(c=>"<h3>"+c.name+"</h3>"+items.filter(i=>i.category_id===c.id).map(i=>"<div class='item'><div><b>"+i.name+"</b><br>"+(i.price_cents==null?"Consultar":(i.price_cents/100).toFixed(2)+" €")+" "+(i.sold_out?"· ESGOTADO":"")+(i.is_specialty?" · ESPECIALIDADE":"")+"</div><button class='danger' onclick=\"removeItem('"+i.id+"')\">Apagar</button></div>").join("")).join("");$("#menuList").innerHTML=html||"<p>Sem pratos.</p>"}
 async function removeItem(id){if(!confirm("Apagar este prato?"))return;const r=await sb.from("menu_items").delete().eq("id",id);if(r.error)alert(r.error.message);else loadAll()}
 function renderDaily(rows){$("#dailyList").innerHTML=rows.length?rows.map(d=>"<div class='item'><div><b>"+d.dish_date+"</b> · "+d.name+"<br>"+(d.published?"Publicado":"Oculto")+"</div><button class='danger' onclick=\"deleteDaily('"+d.id+"')\">Apagar</button></div>").join(""):"<p>Sem pratos do dia.</p>"}
@@ -15,8 +9,6 @@ function renderOrders(rows){$("#ordersList").innerHTML=rows.length?rows.map(o=>"
 async function setOrderStatus(id,status){const r=await sb.from("orders").update({status}).eq("id",id);if(r.error)alert(r.error.message)}
 async function deleteGallery(id){if(!confirm("Apagar foto?"))return;const r=await sb.from("gallery").delete().eq("id",id);if(r.error)alert(r.error.message);else loadAll()}
 async function busy(btn,fn){const old=btn.textContent;btn.disabled=true;btn.textContent="Aguarde…";try{await fn()}finally{btn.disabled=false;btn.textContent=old}}
-$("#login").onclick=()=>busy($("#login"),async()=>{const r=await sb.auth.signInWithPassword({email:$("#email").value.trim(),password:$("#password").value});$("#authMsg").textContent=r.error?r.error.message:"";if(!r.error)await session()});
-$("#logout").onclick=async()=>{await sb.auth.signOut();await session()};
 $("#saveSettings").onclick=async()=>{const q=await sb.from("restaurant_settings").select("id").limit(1).single();if(q.error)return alert(q.error.message);const p={name:$("#sName").value.trim(),phone:$("#sPhone").value.trim(),whatsapp:$("#sWhatsApp").value.trim(),email:$("#sEmail").value.trim(),admin_email:$("#sAdminEmail").value.trim(),address:$("#sAddress").value.trim(),hours:JSON.stringify($("#sHours").value.trim()),maps_url:$("#sMaps").value.trim(),updated_at:new Date().toISOString()};const r=await sb.from("restaurant_settings").update(p).eq("id",q.data.id);alert(r.error?r.error.message:"Dados guardados.");if(!r.error)await loadAll()};
 $("#itemForm").onsubmit=async e=>{e.preventDefault();const r=await sb.from("menu_items").insert({category_id:$("#iCategory").value,name:$("#iName").value.trim(),description:$("#iDesc").value.trim(),price_cents:$("#iPrice").value===""?null:Math.round(Number($("#iPrice").value)*100),image_url:$("#iImage").value.trim()||null,sold_out:$("#iSold").checked,is_specialty:$("#iSpecial").checked,active:true,sort_order:items.length+1});if(r.error)alert(r.error.message);else{e.target.reset();await loadAll()}};
 $("#saveDaily").onclick=async()=>{if(!$("#dDate").value)return alert("Escolhe a data.");const r=await sb.from("daily_dishes").upsert({dish_date:$("#dDate").value,name:$("#dName").value.trim(),description:$("#dDesc").value.trim(),price_cents:$("#dPrice").value===""?null:Math.round(Number($("#dPrice").value)*100),image_url:$("#dImage").value.trim()||null,published:$("#dPublished").checked},{onConflict:"dish_date"});alert(r.error?r.error.message:"Prato do dia guardado.");if(!r.error)await loadAll()};
@@ -68,15 +60,12 @@ async function removeAiImage(path){
 async function callAi(file,purpose,action){
   if(!file)return {error:"Escolhe primeiro uma foto."};
   const image=await compressImage(file);
-  const {data:{session}}=await sb.auth.getSession();
-  if(!session?.access_token)return {error:"A sessão do administrador expirou. Entra novamente."};
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),145000);
   try{
     const response=await fetch(C.url+"/functions/v1/prepare-food-photo",{
       method:"POST",
       headers:{
-        "Authorization":"Bearer "+session.access_token,
         "apikey":C.key,
         "Content-Type":"application/json"
       },
@@ -207,4 +196,4 @@ $("#redoMenu").onclick=()=>redoDescription("menu");
 $("#deleteDailyPhoto").onclick=()=>deleteSelectedPhoto("daily");
 $("#deleteMenuPhoto").onclick=()=>deleteSelectedPhoto("menu");
 
-document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{localStorage.setItem("adminTab",b.dataset.tab);document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));$("#"+b.dataset.tab).classList.remove("hidden")});\nasync function restoreAdminTab(){const tab=localStorage.getItem("adminTab")||"settings";const el=$("#"+tab);if(el){document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));el.classList.remove("hidden");}}\nconst originalSession=session; session=async()=>{await originalSession();if(!$("#panel").classList.contains("hidden"))await restoreAdminTab()}; session();
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{localStorage.setItem("adminTab",b.dataset.tab);document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));$("#"+b.dataset.tab).classList.remove("hidden")});\nasync function restoreAdminTab(){const tab=localStorage.getItem("adminTab")||"settings";const el=$("#"+tab);if(el){document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));el.classList.remove("hidden");}}\nsession();
