@@ -174,10 +174,20 @@ function showSelectedPhoto(file,previewEl,purpose){
   if(!okType)return alert("Escolhe uma imagem JPG, PNG ou WebP.");
   if(file.size>12*1024*1024)return alert("A foto é demasiado grande. Escolhe uma imagem até 12 MB.");
   const previous=selectedPhoto[purpose]; if(previous?.aiPath)removeAiImage(previous.aiPath); selectedPhoto[purpose]={file,aiPath:null,aiUrl:null};
+  if(purpose==="daily"){
+    $("#deleteDailyPhoto").classList.remove("hidden");
+    $("#redoDaily").classList.add("hidden");
+    $("#aiPreview").innerHTML="";
+    $("#aiPreview").classList.add("hidden");
+  }else{
+    $("#deleteMenuPhoto").classList.remove("hidden");
+    $("#redoMenu").classList.add("hidden");
+    $("#iPreview").classList.remove("hidden");
+  }
   if(previewEl){
     const url=URL.createObjectURL(file);
     previewEl.classList.remove("hidden");
-    previewEl.innerHTML="<b>Foto selecionada ✓</b><img src=\""+url+"\" alt=\"Foto selecionada\"><p>Agora toca em <b>Preparar com IA</b>.</p>";
+    previewEl.innerHTML="<b>Foto selecionada ✓</b><img src=\""+url+"\" alt=\"Foto selecionada\"><p>Agora toca em <b>Preparar com IA</b> ou <b>Eliminar foto</b>.</p>";
   }
 }
 function wirePhotoPicker(inputId,cameraId,galleryBtnId,cameraBtnId,previewId,purpose){
