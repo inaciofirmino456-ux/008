@@ -56,10 +56,29 @@ async function prepareWithAI(file,purpose,previewEl){
     }
   }).catch(e=>alert(e.message||"Erro ao preparar a foto."));
 }
-function showSelectedPhoto(file,previewEl){if(!file)return;if(!file.type.startsWith("image/"))return alert("Escolhe uma imagem JPG, PNG ou WebP.");if(file.size>12*1024*1024)return alert("A foto é demasiado grande. Escolhe uma imagem até 12 MB.");if(previewEl){const url=URL.createObjectURL(file);previewEl.classList.remove("hidden");previewEl.innerHTML="<b>Foto selecionada ✓</b><img src=\""+url+"\" alt=\"Foto selecionada\"><p>Agora toca em <b>Preparar com IA</b> quando estiveres pronto.</p>"}}
-function wirePhotoPicker(inputId,cameraId,previewId){const input=$("#"+inputId),camera=$("#"+cameraId),preview=$("#"+previewId);const pick=file=>{if(file)showSelectedPhoto(file,preview)};input.onchange=()=>pick(input.files[0]);camera.onchange=()=>pick(camera.files[0])}
-wirePhotoPicker("dFile","dCamera","dOriginalPreview");wirePhotoPicker("iFile","iCamera","iPreview");
-$("#aiDaily").onclick=()=>prepareWithAI($("#dFile").files[0]||$("#dCamera").files[0],"daily",$("#aiPreview"));
-$("#aiMenu").onclick=()=>prepareWithAI($("#iFile").files[0]||$("#iCamera").files[0],"menu",$("#iPreview"));
+const selectedPhoto={daily:null,menu:null};
+function showSelectedPhoto(file,previewEl){
+  if(!file)return;
+  const type=(file.type||"").toLowerCase();
+  const okType=["image/jpeg","image/png","image/webp"].includes(type)||/\.(jpe?g|png|webp)$/i.test(file.name||"");
+  if(!okType)return alert("Escolhe uma imagem JPG, PNG ou WebP.");
+  if(file.size>12*1024*1024)return alert("A foto é demasiado grande. Escolhe uma imagem até 12 MB.");
+  if(previewEl){
+    const url=URL.createObjectURL(file);
+    previewEl.classList.remove("hidden");
+    previewEl.innerHTML="<b>Foto selecionada ✓</b><img src=\""+url+"\" alt=\"Foto selecionada\"><p>Agora toca em <b>Preparar com IA</b> quando estiveres pronto.</p>";
+  }
+}
+function wirePhotoPicker(inputId,cameraId,galleryBtnId,cameraBtnId,previewId,purpose){
+  const input=$("#"+inputId),camera=$("#"+cameraId),galleryBtn=$("#"+galleryBtnId),cameraBtn=$("#"+cameraBtnId),preview=$("#"+previewId);
+  galleryBtn.onclick=()=>input.click();
+  cameraBtn.onclick=()=>camera.click();
+  input.onchange=()=>{const f=input.files[0];if(f){selectedPhoto[purpose]=f;showSelectedPhoto(f,preview)}};
+  camera.onchange=()=>{const f=camera.files[0];if(f){selectedPhoto[purpose]=f;showSelectedPhoto(f,preview)}};
+}
+wirePhotoPicker("dFile","dCamera","dGalleryBtn","dCameraBtn","dOriginalPreview","daily");
+wirePhotoPicker("iFile","iCamera","iGalleryBtn","iCameraBtn","iPreview","menu");
+$("#aiDaily").onclick=()=>prepareWithAI(selectedPhoto.daily,"daily",$("#aiPreview"));
+$("#aiMenu").onclick=()=>prepareWithAI(selectedPhoto.menu,"menu",$("#iPreview"));
 
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));$("#"+b.dataset.tab).classList.remove("hidden")});session();
