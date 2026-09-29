@@ -22,63 +22,189 @@ $("#itemForm").onsubmit=async e=>{e.preventDefault();const r=await sb.from("menu
 $("#saveDaily").onclick=async()=>{if(!$("#dDate").value)return alert("Escolhe a data.");const r=await sb.from("daily_dishes").upsert({dish_date:$("#dDate").value,name:$("#dName").value.trim(),description:$("#dDesc").value.trim(),price_cents:$("#dPrice").value===""?null:Math.round(Number($("#dPrice").value)*100),image_url:$("#dImage").value.trim()||null,published:$("#dPublished").checked},{onConflict:"dish_date"});alert(r.error?r.error.message:"Prato do dia guardado.");if(!r.error)await loadAll()};
 $("#galleryForm").onsubmit=async e=>{e.preventDefault();const f=$("#gFile").files[0];if(!f)return alert("Escolhe uma imagem.");const path="gallery/"+Date.now()+"-"+f.name.replace(/[^a-zA-Z0-9._-]/g,"-");const up=await sb.storage.from("restaurant-media").upload(path,f,{upsert:false});if(up.error)return alert(up.error.message);const url=sb.storage.from("restaurant-media").getPublicUrl(path).data.publicUrl;const r=await sb.from("gallery").insert({image_url:url,caption:$("#gCaption").value.trim(),sort_order:Date.now(),active:true});alert(r.error?r.error.message:"Foto carregada.");if(!r.error){e.target.reset();await loadAll()}};
 
-async function fileToDataUrl(file){return await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(file)})}
-async function uploadAiImage(base64, prefix){
+async function fileToDataUrl(file){
+  return await new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onload=()=>resolve(fr.result);
+    fr.onerror=reject;
+    fr.readAsDataURL(file);
+  });
+}
+async function compressImage(file){
+  if(file.size<=2.5*1024*1024) return await fileToDataUrl(file);
+  return await new Promise((resolve,reject)=>{
+    const img=new Image();
+    const fr=new FileReader();
+    fr.onload=()=>{
+      img.onload=()=>{
+        const max=1600;
+        const scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));
+        canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+        const ctx=canvas.getContext("2d");
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL("image/jpeg",0.82));
+      };
+      img.onerror=()=>reject(new Error("Não foi possível ler a fotografia."));
+      img.src=fr.result;
+    };
+    fr.onerror=reject;
+    fr.readAsDataURL(file);
+  });
+}
+async function uploadAiImage(base64,prefix){
   const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
   const path="ai/"+prefix+"-"+Date.now()+".png";
   const up=await sb.storage.from("restaurant-media").upload(path,bytes,{contentType:"image/png",upsert:false});
   if(up.error)throw up.error;
-  return sb.storage.from("restaurant-media").getPublicUrl(path).data.publicUrl;
+  return {path,url:sb.storage.from("restaurant-media").getPublicUrl(path).data.publicUrl};
+}
+async function removeAiImage(path){
+  if(!path)return;
+  const r=await sb.storage.from("restaurant-media").remove([path]);
+  if(r.error)console.warn("Não foi possível eliminar a imagem temporária:",r.error);
+}
+async function callAi(file,purpose,action){
+  if(!file)return {error:"Escolhe primeiro uma foto."};
+  const image=await compressImage(file);
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session?.access_token)return {error:"A sessão do administrador expirou. Entra novamente."};
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),145000);
+  try{
+    const response=await fetch(C.url+"/functions/v1/prepare-food-photo",{
+      method:"POST",
+      headers:{
+        "Authorization":"Bearer "+session.access_token,
+        "apikey":C.key,
+        "Content-Type":"application/json"
+      },
+      body:JSON.stringify({image,purpose,action}),
+      signal:controller.signal
+    });
+    const text=await response.text();
+    let data={};
+    try{data=JSON.parse(text)}catch{}
+    if(!response.ok)throw new Error(data.error||("A IA respondeu com erro "+response.status+"."));
+    return data;
+  }catch(e){
+    if(e.name==="AbortError")throw new Error("A IA demorou demasiado tempo a responder. Tenta novamente com uma foto mais pequena.");
+    if(e instanceof TypeError)throw new Error("Não foi possível contactar o serviço de IA. Verifica a internet e tenta novamente.");
+    throw e;
+  }finally{clearTimeout(timer)}
 }
 async function prepareWithAI(file,purpose,previewEl){
   if(!file)return alert("Escolhe primeiro uma foto.");
-  if(file.size>8*1024*1024)return alert("A foto é demasiado grande. Escolhe uma imagem até 8 MB.");
+  if(file.size>12*1024*1024)return alert("A foto é demasiado grande. Escolhe uma imagem até 12 MB.");
   const btn=purpose==="daily"?$("#aiDaily"):$("#aiMenu");
   await busy(btn,async()=>{
-    if(previewEl)previewEl.classList.remove("hidden");
-    if(previewEl)previewEl.innerHTML="<p>✨ A IA está a preparar a foto e a descrição…</p>";
-    const dataUrl=await fileToDataUrl(file);
-    const r=await sb.functions.invoke("prepare-food-photo",{body:{image:dataUrl,purpose}});
-    if(r.error)throw new Error(r.error.message||"Não foi possível contactar a IA.");
-    const d=r.data||{};
+    if(previewEl){previewEl.classList.remove("hidden");previewEl.innerHTML="<p>✨ A preparar a fotografia… isto pode demorar até 1–2 minutos.</p>"}
+    const d=await callAi(file,purpose,"prepare");
     if(d.error)throw new Error(d.error);
-    const url=await uploadAiImage(d.image_base64,purpose);
+    if(!d.image_base64)throw new Error("A IA não devolveu uma imagem.");
+    const uploaded=await uploadAiImage(d.image_base64,purpose);
+    const state=selectedPhoto[purpose];
+    if(state?.aiPath)await removeAiImage(state.aiPath);
+    if(state){state.aiPath=uploaded.path;state.aiUrl=uploaded.url}
     if(purpose==="daily"){
-      $("#dImage").value=url;
+      $("#dImage").value=uploaded.url;
       if(d.name)$("#dName").value=d.name;
       if(d.description)$("#dDesc").value=d.description;
-      if(previewEl)previewEl.innerHTML="<b>Pré-visualização pronta ✓</b><img src='"+url+"' alt='Pré-visualização do prato'><p>"+(d.description||"Descrição preparada pela IA.")+"</p>";
+      if(previewEl)previewEl.innerHTML="<b>Pré-visualização pronta ✓</b><img src='"+uploaded.url+"' alt='Pré-visualização do prato'><p>"+(d.description||"Descrição preparada pela IA.")+"</p>";
+      $("#redoDaily").classList.remove("hidden");
+      $("#deleteDailyPhoto").classList.remove("hidden");
     }else{
-      $("#iImage").value=url;
+      $("#iImage").value=uploaded.url;
       if(d.name&&(!$("#iName").value.trim()||$("#iName").value.trim()==="Prato do dia"))$("#iName").value=d.name;
       if(d.description)$("#iDesc").value=d.description;
-      alert("✨ Foto preparada pela IA. Revê os dados e adiciona o prato.");
+      $("#redoMenu").classList.remove("hidden");
+      $("#deleteMenuPhoto").classList.remove("hidden");
+      $("#iPreview").classList.remove("hidden");
+      $("#iPreview").innerHTML="<b>Pré-visualização pronta ✓</b><img src='"+uploaded.url+"' alt='Pré-visualização do prato'><p>"+(d.description||"Descrição preparada pela IA.")+"</p>";
     }
-  }).catch(e=>alert(e.message||"Erro ao preparar a foto."));
+  }).catch(e=>{
+    if(previewEl){previewEl.classList.remove("hidden");previewEl.innerHTML="<p class='aiError'>⚠️ "+(e.message||"Erro ao preparar a foto.")+"</p>"}
+    alert(e.message||"Erro ao preparar a foto.");
+  });
+}
+async function redoDescription(purpose){
+  const state=selectedPhoto[purpose];
+  if(!state?.file)return alert("Não há uma fotografia selecionada.");
+  const btn=purpose==="daily"?$("#redoDaily"):$("#redoMenu");
+  await busy(btn,async()=>{
+    const target=purpose==="daily"?$("#aiPreview"):$("#iPreview");
+    target.classList.remove("hidden");
+    target.innerHTML="<p>🔄 A IA está a criar outra descrição…</p>";
+    const d=await callAi(state.file,purpose,"describe");
+    if(d.error)throw new Error(d.error);
+    if(purpose==="daily"){
+      if(d.name)$("#dName").value=d.name;
+      $("#dDesc").value=d.description||"";
+      target.innerHTML="<b>Nova descrição pronta ✓</b><p>"+(d.description||"Sem descrição gerada.")+"</p>";
+    }else{
+      if(d.name)$("#iName").value=d.name;
+      $("#iDesc").value=d.description||"";
+      target.innerHTML="<b>Nova descrição pronta ✓</b><img src='"+(state.aiUrl||"")+"' alt='Pré-visualização do prato'><p>"+(d.description||"Sem descrição gerada.")+"</p>";
+    }
+  }).catch(e=>alert(e.message||"Erro ao refazer a descrição."));
+}
+async function deleteSelectedPhoto(purpose){
+  const state=selectedPhoto[purpose];
+  if(state?.aiPath)await removeAiImage(state.aiPath);
+  selectedPhoto[purpose]=null;
+  if(purpose==="daily"){
+    $("#dFile").value="";
+    $("#dCamera").value="";
+    $("#dImage").value="";
+    $("#dOriginalPreview").innerHTML="";
+    $("#dOriginalPreview").classList.add("hidden");
+    $("#aiPreview").innerHTML="";
+    $("#aiPreview").classList.add("hidden");
+    $("#redoDaily").classList.add("hidden");
+    $("#deleteDailyPhoto").classList.add("hidden");
+  }else{
+    $("#iFile").value="";
+    $("#iCamera").value="";
+    $("#iImage").value="";
+    $("#iPreview").innerHTML="";
+    $("#iPreview").classList.add("hidden");
+    $("#redoMenu").classList.add("hidden");
+    $("#deleteMenuPhoto").classList.add("hidden");
+  }
+}
+async function prepareSelected(purpose){
+  const state=selectedPhoto[purpose];
+  return prepareWithAI(state?.file,purpose,purpose==="daily"?$("#aiPreview"):$("#iPreview"));
 }
 const selectedPhoto={daily:null,menu:null};
-function showSelectedPhoto(file,previewEl){
+function showSelectedPhoto(file,previewEl,purpose){
   if(!file)return;
   const type=(file.type||"").toLowerCase();
   const okType=["image/jpeg","image/png","image/webp"].includes(type)||/\.(jpe?g|png|webp)$/i.test(file.name||"");
   if(!okType)return alert("Escolhe uma imagem JPG, PNG ou WebP.");
   if(file.size>12*1024*1024)return alert("A foto é demasiado grande. Escolhe uma imagem até 12 MB.");
+  selectedPhoto[purpose]={file,aiPath:null,aiUrl:null};
   if(previewEl){
     const url=URL.createObjectURL(file);
     previewEl.classList.remove("hidden");
-    previewEl.innerHTML="<b>Foto selecionada ✓</b><img src=\""+url+"\" alt=\"Foto selecionada\"><p>Agora toca em <b>Preparar com IA</b> quando estiveres pronto.</p>";
+    previewEl.innerHTML="<b>Foto selecionada ✓</b><img src=\""+url+"\" alt=\"Foto selecionada\"><p>Agora toca em <b>Preparar com IA</b>.</p>";
   }
 }
 function wirePhotoPicker(inputId,cameraId,galleryBtnId,cameraBtnId,previewId,purpose){
   const input=$("#"+inputId),camera=$("#"+cameraId),galleryBtn=$("#"+galleryBtnId),cameraBtn=$("#"+cameraBtnId),preview=$("#"+previewId);
-  galleryBtn.onclick=()=>input.click();
-  cameraBtn.onclick=()=>camera.click();
-  input.onchange=()=>{const f=input.files[0];if(f){selectedPhoto[purpose]=f;showSelectedPhoto(f,preview)}};
-  camera.onchange=()=>{const f=camera.files[0];if(f){selectedPhoto[purpose]=f;showSelectedPhoto(f,preview)}};
+  galleryBtn.onclick=()=>{localStorage.setItem("adminTab",purpose==="daily"?"daily":"menu");input.click()};
+  cameraBtn.onclick=()=>{localStorage.setItem("adminTab",purpose==="daily"?"daily":"menu");camera.click()};
+  input.onchange=()=>{const f=input.files[0];if(f)showSelectedPhoto(f,preview,purpose)};
+  camera.onchange=()=>{const f=camera.files[0];if(f)showSelectedPhoto(f,preview,purpose)};
 }
 wirePhotoPicker("dFile","dCamera","dGalleryBtn","dCameraBtn","dOriginalPreview","daily");
 wirePhotoPicker("iFile","iCamera","iGalleryBtn","iCameraBtn","iPreview","menu");
-$("#aiDaily").onclick=()=>prepareWithAI(selectedPhoto.daily,"daily",$("#aiPreview"));
-$("#aiMenu").onclick=()=>prepareWithAI(selectedPhoto.menu,"menu",$("#iPreview"));
+$("#aiDaily").onclick=()=>prepareSelected("daily");
+$("#aiMenu").onclick=()=>prepareSelected("menu");
+$("#redoDaily").onclick=()=>redoDescription("daily");
+$("#redoMenu").onclick=()=>redoDescription("menu");
+$("#deleteDailyPhoto").onclick=()=>deleteSelectedPhoto("daily");
+$("#deleteMenuPhoto").onclick=()=>deleteSelectedPhoto("menu");
 
-document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));$("#"+b.dataset.tab).classList.remove("hidden")});session();
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{localStorage.setItem("adminTab",b.dataset.tab);document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));$("#"+b.dataset.tab).classList.remove("hidden")});session();
