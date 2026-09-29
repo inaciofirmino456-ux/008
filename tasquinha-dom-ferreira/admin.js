@@ -21,4 +21,42 @@ $("#saveSettings").onclick=async()=>{const q=await sb.from("restaurant_settings"
 $("#itemForm").onsubmit=async e=>{e.preventDefault();const r=await sb.from("menu_items").insert({category_id:$("#iCategory").value,name:$("#iName").value.trim(),description:$("#iDesc").value.trim(),price_cents:$("#iPrice").value===""?null:Math.round(Number($("#iPrice").value)*100),image_url:$("#iImage").value.trim()||null,sold_out:$("#iSold").checked,is_specialty:$("#iSpecial").checked,active:true,sort_order:items.length+1});if(r.error)alert(r.error.message);else{e.target.reset();await loadAll()}};
 $("#saveDaily").onclick=async()=>{if(!$("#dDate").value)return alert("Escolhe a data.");const r=await sb.from("daily_dishes").upsert({dish_date:$("#dDate").value,name:$("#dName").value.trim(),description:$("#dDesc").value.trim(),price_cents:$("#dPrice").value===""?null:Math.round(Number($("#dPrice").value)*100),image_url:$("#dImage").value.trim()||null,published:$("#dPublished").checked},{onConflict:"dish_date"});alert(r.error?r.error.message:"Prato do dia guardado.");if(!r.error)await loadAll()};
 $("#galleryForm").onsubmit=async e=>{e.preventDefault();const f=$("#gFile").files[0];if(!f)return alert("Escolhe uma imagem.");const path="gallery/"+Date.now()+"-"+f.name.replace(/[^a-zA-Z0-9._-]/g,"-");const up=await sb.storage.from("restaurant-media").upload(path,f,{upsert:false});if(up.error)return alert(up.error.message);const url=sb.storage.from("restaurant-media").getPublicUrl(path).data.publicUrl;const r=await sb.from("gallery").insert({image_url:url,caption:$("#gCaption").value.trim(),sort_order:Date.now(),active:true});alert(r.error?r.error.message:"Foto carregada.");if(!r.error){e.target.reset();await loadAll()}};
+
+async function fileToDataUrl(file){return await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(file)})}
+async function uploadAiImage(base64, prefix){
+  const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+  const path="ai/"+prefix+"-"+Date.now()+".png";
+  const up=await sb.storage.from("restaurant-media").upload(path,bytes,{contentType:"image/png",upsert:false});
+  if(up.error)throw up.error;
+  return sb.storage.from("restaurant-media").getPublicUrl(path).data.publicUrl;
+}
+async function prepareWithAI(file,purpose,previewEl){
+  if(!file)return alert("Escolhe primeiro uma foto.");
+  if(file.size>8*1024*1024)return alert("A foto é demasiado grande. Escolhe uma imagem até 8 MB.");
+  const btn=purpose==="daily"?$("#aiDaily"):$("#aiMenu");
+  await busy(btn,async()=>{
+    if(previewEl)previewEl.classList.remove("hidden");
+    if(previewEl)previewEl.innerHTML="<p>✨ A IA está a preparar a foto e a descrição…</p>";
+    const dataUrl=await fileToDataUrl(file);
+    const r=await sb.functions.invoke("prepare-food-photo",{body:{image:dataUrl,purpose}});
+    if(r.error)throw new Error(r.error.message||"Não foi possível contactar a IA.");
+    const d=r.data||{};
+    if(d.error)throw new Error(d.error);
+    const url=await uploadAiImage(d.image_base64,purpose);
+    if(purpose==="daily"){
+      $("#dImage").value=url;
+      if(d.name)$("#dName").value=d.name;
+      if(d.description)$("#dDesc").value=d.description;
+      if(previewEl)previewEl.innerHTML="<b>Pré-visualização pronta ✓</b><img src='"+url+"' alt='Pré-visualização do prato'><p>"+(d.description||"Descrição preparada pela IA.")+"</p>";
+    }else{
+      $("#iImage").value=url;
+      if(d.name&&(!$("#iName").value.trim()||$("#iName").value.trim()==="Prato do dia"))$("#iName").value=d.name;
+      if(d.description)$("#iDesc").value=d.description;
+      alert("✨ Foto preparada pela IA. Revê os dados e adiciona o prato.");
+    }
+  }).catch(e=>alert(e.message||"Erro ao preparar a foto."));
+}
+$("#dFile").onchange=()=>{const f=$("#dFile").files[0];if(f)prepareWithAI(f,"daily",$("#aiPreview"))};
+$("#iFile").onchange=()=>{const f=$("#iFile").files[0];if(f)prepareWithAI(f,"menu",null)};
+
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));$("#"+b.dataset.tab).classList.remove("hidden")});session();
