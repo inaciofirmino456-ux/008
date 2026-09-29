@@ -184,7 +184,7 @@ function showSelectedPhoto(file,previewEl,purpose){
   const okType=["image/jpeg","image/png","image/webp"].includes(type)||/\.(jpe?g|png|webp)$/i.test(file.name||"");
   if(!okType)return alert("Escolhe uma imagem JPG, PNG ou WebP.");
   if(file.size>12*1024*1024)return alert("A foto é demasiado grande. Escolhe uma imagem até 12 MB.");
-  selectedPhoto[purpose]={file,aiPath:null,aiUrl:null};
+  const previous=selectedPhoto[purpose]; if(previous?.aiPath)removeAiImage(previous.aiPath); selectedPhoto[purpose]={file,aiPath:null,aiUrl:null};
   if(previewEl){
     const url=URL.createObjectURL(file);
     previewEl.classList.remove("hidden");
@@ -207,4 +207,4 @@ $("#redoMenu").onclick=()=>redoDescription("menu");
 $("#deleteDailyPhoto").onclick=()=>deleteSelectedPhoto("daily");
 $("#deleteMenuPhoto").onclick=()=>deleteSelectedPhoto("menu");
 
-document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{localStorage.setItem("adminTab",b.dataset.tab);document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));$("#"+b.dataset.tab).classList.remove("hidden")});session();
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{localStorage.setItem("adminTab",b.dataset.tab);document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));$("#"+b.dataset.tab).classList.remove("hidden")});\nasync function restoreAdminTab(){const tab=localStorage.getItem("adminTab")||"settings";const el=$("#"+tab);if(el){document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));el.classList.remove("hidden");}}\nconst originalSession=session; session=async()=>{await originalSession();if(!$("#panel").classList.contains("hidden"))await restoreAdminTab()}; session();
