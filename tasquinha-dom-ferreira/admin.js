@@ -267,7 +267,7 @@ async function sendAiChat(){
     try{
       const {data:{session},error:sessionError}=await sb.auth.getSession();
       if(sessionError||!session?.access_token)throw new Error("A sessão do dono expirou. Entra novamente.");
-      const {data,error}=await sb.functions.invoke("owner-chat",{
+      const {data,error}=await sb.functions.invoke("prepare-food-photo",{
         body:{action:"chat",purpose:"daily",messages:chatMessages},
         headers:{Authorization:"Bearer "+session.access_token}
       });
