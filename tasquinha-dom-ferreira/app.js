@@ -5,7 +5,27 @@ const money=c=>c==null?'Consultar':(c/100).toLocaleString('pt-PT',{style:'curren
 function waLink(number,text){const n=String(number||'').replace(/\D/g,'');return n?`https://wa.me/${n}?text=${encodeURIComponent(text)}`:''}
 let DATA=null;let CART=[];
 
-async function api(table,query='',options={}){\n const headers={apikey:CONFIG.key,Authorization:'Bearer '+CONFIG.key,...(options.headers||{})};\n const r=await fetch(CONFIG.url+'/rest/v1/'+table+(query?'?'+query:''),{...options,headers,cache:'no-store'});\n if(!r.ok)throw new Error(table+' '+r.status+' '+await r.text());\n if(r.status===204)return null;\n return r.json();\n}\nasync function loadData(){\n try{\n  const [settings,cats,items,daily]=await Promise.all([\n   api('restaurant_settings','select=*&limit=1'),\n   api('menu_categories','select=*&active=eq.true&order=sort_order.asc'),\n   api('menu_items','select=*&active=eq.true&order=sort_order.asc'),\n   api('daily_dishes','select=*&published=eq.true&order=dish_date.desc&limit=1')\n  ]);\n  const s=settings?.[0]||null; const d=daily?.[0]||null;\n  const menu=(cats||[]).map(c=>({category:c.name,items:(items||[]).filter(i=>i.category_id===c.id).map(i=>({id:i.id,name:i.name,description:i.description,price:i.price_cents,image:i.image_url,sold_out:i.sold_out,specialty:i.is_specialty}))}));\n  let data={settings:{...DEMO.settings,...(s||{})},daily:d?{id:d.id,name:d.name,description:d.description,price:d.price_cents,image:d.image_url}:null,menu:menu.length?menu:DEMO.menu};\n  return data;\n }catch(e){console.error('Erro ao carregar dados públicos:',e);return DEMO}\n}\nfunction addToCart(item){if(item.sold_out)return;const key=String(item.id);const x=CART.find(i=>String(i.id)===key);if(x)x.qty++;else CART.push({...item,qty:1});updateCartButton();openCart();}
+async function api(table,query='',options={}){
+ const headers={apikey:CONFIG.key,Authorization:'Bearer '+CONFIG.key,...(options.headers||{})};
+ const r=await fetch(CONFIG.url+'/rest/v1/'+table+(query?'?'+query:''),{...options,headers,cache:'no-store'});
+ if(!r.ok)throw new Error(table+' '+r.status+' '+await r.text());
+ if(r.status===204)return null;
+ return r.json();
+}
+async function loadData(){
+ try{
+  const [settings,cats,items,daily]=await Promise.all([
+   api('restaurant_settings','select=*&limit=1'),
+   api('menu_categories','select=*&active=eq.true&order=sort_order.asc'),
+   api('menu_items','select=*&active=eq.true&order=sort_order.asc'),
+   api('daily_dishes','select=*&published=eq.true&order=dish_date.desc&limit=1')
+  ]);
+  const s=settings?.[0]||null; const d=daily?.[0]||null;
+  const menu=(cats||[]).map(c=>({category:c.name,items:(items||[]).filter(i=>i.category_id===c.id).map(i=>({id:i.id,name:i.name,description:i.description,price:i.price_cents,image:i.image_url,sold_out:i.sold_out,specialty:i.is_specialty}))}));
+  return {settings:{...DEMO.settings,...(s||{})},daily:d?{id:d.id,name:d.name,description:d.description,price:d.price_cents,image:d.image_url}:null,menu:menu.length?menu:DEMO.menu};
+ }catch(e){console.error('Erro ao carregar dados públicos:',e);return DEMO}
+}
+function addToCart(item){if(item.sold_out)return;const key=String(item.id);const x=CART.find(i=>String(i.id)===key);if(x)x.qty++;else CART.push({...item,qty:1});updateCartButton();openCart();}
 function changeQty(id,delta){const x=CART.find(i=>String(i.id)===String(id));if(!x)return;x.qty+=delta;if(x.qty<=0)CART=CART.filter(i=>String(i.id)!==String(id));renderCart();updateCartButton();}
 function cartTotal(){return CART.reduce((n,i)=>n+(i.price||0)*i.qty,0)}
 function updateCartButton(){const n=CART.reduce((x,i)=>x+i.qty,0);document.querySelectorAll('[data-cart-count]').forEach(e=>e.textContent=n)}
@@ -32,8 +52,8 @@ async function submitOrder(e){
  $('#orderStatus').textContent='A enviar…';
  try{
   await api('orders','',{method:'POST',headers:{'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify(order)});
-  const lines=CART.map(i=>`${i.qty}x ${i.name} — ${money(i.price)}`).join('\n');
-  const msg=`Olá, sou ${order.customer_name}.\nPedido:\n${lines}\nTotal: ${money(cartTotal())}\nTelefone: ${order.customer_phone}${order.notes?'\nNotas: '+order.notes:''}`;
+  const lines=CART.map(i=>`${i.qty}x ${i.name}`).join('\n');
+  const msg=`Olá, sou ${order.customer_name}.\nGostaria de saber os preços e fazer esta encomenda:\n${lines}\nTelefone: ${order.customer_phone}${order.notes?'\nNotas: '+order.notes:''}`;
   const wa=waLink(DATA.settings.whatsapp,msg);
   $('#orderStatus').innerHTML=wa?'Pedido registado. A abrir WhatsApp…':'Pedido registado. O restaurante irá contactar pelo telefone.';
   CART=[];updateCartButton();renderCart();
@@ -64,4 +84,5 @@ function render(data){
  ensureCartModal();updateCartButton();fixImages();setupMotion();$('#year').textContent=new Date().getFullYear();
 }
 function fixImages(){document.querySelectorAll('img').forEach(img=>{img.addEventListener('error',()=>{if(img.dataset.fallbackApplied)return;img.dataset.fallbackApplied='1';img.src='https://visitbraga.travel/wp-content/uploads/2025/07/dferreira_2.webp';img.classList.add('bad');if(img.parentElement)img.parentElement.classList.add('photo-failed')},{once:true})})}
-async function refreshPublic(){const data=await loadData();render(data)}\nrefreshPublic();\nsetInterval(refreshPublic,15000);
+async function refreshPublic(){const data=await loadData();render(data)}\nrefreshPublic();
+setInterval(refreshPublic,15000);
