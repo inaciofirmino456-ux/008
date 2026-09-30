@@ -56,46 +56,4 @@ $("#galleryForm").onsubmit=async e=>{e.preventDefault();const f=$("#gFile").file
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{localStorage.setItem("adminTab",b.dataset.tab);document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));$("#"+b.dataset.tab).classList.remove("hidden")});
 async function restoreAdminTab(){const tab=localStorage.getItem("adminTab")||"settings";const el=$("#"+tab);if(el){document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));el.classList.remove("hidden");}}
 
-const chatMessages=[];
-function addChatMessage(role,text){
-  chatMessages.push({role,content:text});
-  const box=$("#aiChatMessages");
-  const el=document.createElement("div");
-  el.className="aiChatMessage "+role;
-  el.textContent=text;
-  box.appendChild(el);
-  box.scrollTop=box.scrollHeight;
-}
-async function sendAiChat(){
-  const input=$("#aiChatInput"),btn=$("#aiChatSend");
-  const message=input.value.trim();
-  if(!message)return;
-  input.value="";
-  addChatMessage("user",message);
-  btn.disabled=true;btn.textContent="Aguarde…";
-  try{
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),90000);
-    try{
-      const {data:{session},error:sessionError}=await sb.auth.getSession();
-      if(sessionError||!session?.access_token)throw new Error("A sessão do dono expirou. Entra novamente.");
-      const {data,error}=await sb.functions.invoke("prepare-food-photo",{
-        body:{action:"chat",purpose:"daily",messages:chatMessages},
-        headers:{Authorization:"Bearer "+session.access_token}
-      });
-      if(error)throw new Error(error.message||"Não foi possível contactar a IA.");
-      if(!data?.reply)throw new Error("A IA não devolveu uma resposta.");
-      addChatMessage("assistant",data.reply);
-    }finally{clearTimeout(timer)}
-  }catch(e){
-    addChatMessage("assistant","⚠️ "+(e.message||"Não foi possível contactar a IA."));
-  }finally{
-    btn.disabled=false;btn.textContent="Enviar";
-    input.focus();
-  }
-}
-$("#aiChatSend").onclick=sendAiChat;
-$("#aiChatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendAiChat()}});
-addChatMessage("assistant","Olá! Sou o assistente da área do dono. Posso ajudar com o prato do dia, menu, fotografias e conteúdo do site.");
-
 initAuth();
