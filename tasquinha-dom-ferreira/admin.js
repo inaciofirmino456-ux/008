@@ -102,8 +102,11 @@ async function callAi(file,purpose,action){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),145000);
   try{
+    const {data:{session},error:sessionError}=await sb.auth.getSession();
+    if(sessionError||!session?.access_token)throw new Error("A sessão do dono expirou. Entra novamente.");
     const {data,error}=await sb.functions.invoke("prepare-food-photo",{
-      body:{image,purpose,action}
+      body:{image,purpose,action},
+      headers:{Authorization:"Bearer "+session.access_token}
     });
     if(error)throw new Error(error.message||"Não foi possível contactar a IA.");
     if(!data)throw new Error("A IA não devolveu resposta.");
@@ -262,8 +265,11 @@ async function sendAiChat(){
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),90000);
     try{
+      const {data:{session},error:sessionError}=await sb.auth.getSession();
+      if(sessionError||!session?.access_token)throw new Error("A sessão do dono expirou. Entra novamente.");
       const {data,error}=await sb.functions.invoke("owner-chat",{
-        body:{action:"chat",purpose:"daily",messages:chatMessages}
+        body:{action:"chat",purpose:"daily",messages:chatMessages},
+        headers:{Authorization:"Bearer "+session.access_token}
       });
       if(error)throw new Error(error.message||"Não foi possível contactar a IA.");
       if(!data?.reply)throw new Error("A IA não devolveu uma resposta.");
