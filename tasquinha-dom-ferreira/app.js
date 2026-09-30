@@ -20,8 +20,8 @@ function ensureCartModal(){
 function renderCart(){
  ensureCartModal();const box=$('#cartItems');
  if(!CART.length){box.innerHTML='<p>O pedido está vazio. Escolha um prato na ementa.</p>';$('#cartTotal').textContent='';return}
- box.innerHTML=CART.map(i=>'<div class="cart-row"><div><strong>'+i.name+'</strong><br><small>'+money(i.price)+'</small></div><div class="qty"><button type="button" data-minus="'+i.id+'">−</button><b>'+i.qty+'</b><button type="button" data-plus="'+i.id+'">+</button></div></div>').join('');
- $('#cartTotal').textContent='Total: '+money(cartTotal());
+ box.innerHTML=CART.map(i=>'<div class="cart-row"><div><strong>'+i.name+'</strong><br><small>Preço a confirmar</small></div><div class="qty"><button type="button" data-minus="'+i.id+'">−</button><b>'+i.qty+'</b><button type="button" data-plus="'+i.id+'">+</button></div></div>').join('');
+ $('#cartTotal').textContent='Preços e disponibilidade serão confirmados pelo restaurante.'
  box.querySelectorAll('[data-minus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.minus,-1));
  box.querySelectorAll('[data-plus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.plus,1));
 }
@@ -58,7 +58,7 @@ function render(data){
  const phone=data.settings.phone||DEMO.settings.phone;$('#phoneLink').textContent=phone;$('#phoneLink').href=tel(phone);
  ['headerContact','heroContact','mobileContact'].forEach(id=>{const e=$('#'+id);if(e)e.href=tel(phone)});
  $('#messageLink').href='sms:'+phone;
- const wa=waLink(data.settings.whatsapp,'Olá, gostaria de fazer uma reserva/pedido na Tasquinha Dom Ferreira.');if(wa){$('#whatsappLink').href=wa;$('#whatsappLink').classList.remove('hidden')}
+ const waNumber=data.settings.whatsapp||data.settings.phone;const wa=waLink(waNumber,'Olá! Gostaria de saber os preços dos pratos, o prato do dia e fazer uma encomenda na Tasquinha Dom Ferreira.');if(wa){$('#whatsappLink').href=wa;$('#whatsappLink').classList.remove('hidden')}
  const map=$('.map-link');if(map&&data.settings.maps_url)map.href=data.settings.maps_url;
  const mobile=$('#mobileOrder');if(mobile){mobile.href='#';mobile.onclick=e=>{e.preventDefault();openCart()}}
  ensureCartModal();updateCartButton();fixImages();setupMotion();$('#year').textContent=new Date().getFullYear();
