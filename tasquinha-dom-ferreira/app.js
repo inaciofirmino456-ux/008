@@ -63,5 +63,5 @@ function render(data){
  const mobile=$('#mobileOrder');if(mobile){mobile.href='#';mobile.onclick=e=>{e.preventDefault();openCart()}}
  ensureCartModal();updateCartButton();fixImages();setupMotion();$('#year').textContent=new Date().getFullYear();
 }
-function fixImages(){document.querySelectorAll('img').forEach(img=>{img.addEventListener('error',()=>{if(img.dataset.fallbackApplied)return;img.dataset.fallbackApplied='1';img.src='https://media-cdn.tripadvisor.com/media/photo-w/27/42/7f/98/caption.jpg';img.classList.add('bad');if(img.parentElement)img.parentElement.classList.add('photo-failed')},{once:true})})}
+function fixImages(){document.querySelectorAll('img').forEach(img=>{img.addEventListener('error',()=>{if(img.dataset.fallbackApplied)return;img.dataset.fallbackApplied='1';img.src='https://visitbraga.travel/wp-content/uploads/2025/07/dferreira_2.webp';img.classList.add('bad');if(img.parentElement)img.parentElement.classList.add('photo-failed')},{once:true})})}
 async function refreshPublic(){const data=await loadData();render(data)}\nrefreshPublic();\nsetInterval(refreshPublic,15000);
