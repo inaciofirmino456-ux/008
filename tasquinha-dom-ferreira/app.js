@@ -5,23 +5,7 @@ const money=c=>c==null?'Consultar':(c/100).toLocaleString('pt-PT',{style:'curren
 function waLink(number,text){const n=String(number||'').replace(/\D/g,'');return n?`https://wa.me/${n}?text=${encodeURIComponent(text)}`:''}
 let DATA=null;let CART=[];
 
-async function loadData(){
- try{
-  const sb=window.supabase.createClient(CONFIG.url,CONFIG.key);
-  const [{data:s},{data:cats},{data:items},{data:daily}]=await Promise.all([
-   sb.from('restaurant_settings').select('*').limit(1).maybeSingle(),
-   sb.from('menu_categories').select('*').eq('active',true).order('sort_order'),
-   sb.from('menu_items').select('*').eq('active',true).order('sort_order'),
-   sb.from('daily_dishes').select('*').eq('published',true).order('dish_date',{ascending:false}).limit(1).maybeSingle()
-  ]);
-  if(!s&&!cats?.length&&!items?.length&&!daily)return DEMO;
-  const menu=(cats||[]).map(c=>({category:c.name,items:(items||[]).filter(i=>i.category_id===c.id).map(i=>({id:i.id,name:i.name,description:i.description,price:i.price_cents, image:i.image_url,sold_out:i.sold_out,specialty:i.is_specialty}))}));
-  let settings={...DEMO.settings,...(s||{})};
-  if(typeof settings.hours==='object')settings.hours=settings.hours||'';
-  return {settings,daily:daily?{id:daily.id,name:daily.name,description:daily.description,price:daily.price_cents,image:daily.image_url}:DEMO.daily,menu:menu.length?menu:DEMO.menu};
- }catch(e){console.warn('Supabase indisponível, conteúdo de demonstração.',e);return DEMO}
-}
-function addToCart(item){if(item.sold_out)return;const key=String(item.id);const x=CART.find(i=>String(i.id)===key);if(x)x.qty++;else CART.push({...item,qty:1});updateCartButton();openCart();}
+async function api(table,query='',options={}){\n const headers={apikey:CONFIG.key,Authorization:'Bearer '+CONFIG.key,...(options.headers||{})};\n const r=await fetch(CONFIG.url+'/rest/v1/'+table+(query?'?'+query:''),{...options,headers,cache:'no-store'});\n if(!r.ok)throw new Error(table+' '+r.status+' '+await r.text());\n if(r.status===204)return null;\n return r.json();\n}\nasync function loadData(){\n try{\n  const [settings,cats,items,daily]=await Promise.all([\n   api('restaurant_settings','select=*&limit=1'),\n   api('menu_categories','select=*&active=eq.true&order=sort_order.asc'),\n   api('menu_items','select=*&active=eq.true&order=sort_order.asc'),\n   api('daily_dishes','select=*&published=eq.true&order=dish_date.desc&limit=1')\n  ]);\n  const s=settings?.[0]||null; const d=daily?.[0]||null;\n  const menu=(cats||[]).map(c=>({category:c.name,items:(items||[]).filter(i=>i.category_id===c.id).map(i=>({id:i.id,name:i.name,description:i.description,price:i.price_cents,image:i.image_url,sold_out:i.sold_out,specialty:i.is_specialty}))}));\n  let data={settings:{...DEMO.settings,...(s||{})},daily:d?{id:d.id,name:d.name,description:d.description,price:d.price_cents,image:d.image_url}:null,menu:menu.length?menu:DEMO.menu};\n  return data;\n }catch(e){console.error('Erro ao carregar dados públicos:',e);return DEMO}\n}\nfunction addToCart(item){if(item.sold_out)return;const key=String(item.id);const x=CART.find(i=>String(i.id)===key);if(x)x.qty++;else CART.push({...item,qty:1});updateCartButton();openCart();}
 function changeQty(id,delta){const x=CART.find(i=>String(i.id)===String(id));if(!x)return;x.qty+=delta;if(x.qty<=0)CART=CART.filter(i=>String(i.id)!==String(id));renderCart();updateCartButton();}
 function cartTotal(){return CART.reduce((n,i)=>n+(i.price||0)*i.qty,0)}
 function updateCartButton(){const n=CART.reduce((x,i)=>x+i.qty,0);document.querySelectorAll('[data-cart-count]').forEach(e=>e.textContent=n)}
@@ -47,7 +31,7 @@ async function submitOrder(e){
  const order={customer_name:$('#customerName').value.trim(),customer_phone:$('#customerPhone').value.trim(),order_type:DATA.settings.whatsapp?'whatsapp':'contact',items:CART.map(i=>({name:i.name,quantity:i.qty,unit_price_cents:i.price})),notes:$('#orderNotes').value.trim(),status:'new'};
  $('#orderStatus').textContent='A enviar…';
  try{
-  const sb=window.supabase.createClient(CONFIG.url,CONFIG.key);const r=await sb.from('orders').insert(order);if(r.error)throw r.error;
+  await api('orders','',{method:'POST',headers:{'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify(order)});
   const lines=CART.map(i=>`${i.qty}x ${i.name} — ${money(i.price)}`).join('\n');
   const msg=`Olá, sou ${order.customer_name}.\nPedido:\n${lines}\nTotal: ${money(cartTotal())}\nTelefone: ${order.customer_phone}${order.notes?'\nNotas: '+order.notes:''}`;
   const wa=waLink(DATA.settings.whatsapp,msg);
@@ -73,4 +57,4 @@ function render(data){
  ensureCartModal();updateCartButton();fixImages();$('#year').textContent=new Date().getFullYear();
 }
 function fixImages(){document.querySelectorAll('img').forEach(img=>{img.addEventListener('error',()=>{img.classList.add('bad');if(img.parentElement)img.parentElement.classList.add('photo-failed')},{once:true})})}
-loadData().then(render);
+async function refreshPublic(){const data=await loadData();render(data)}\nrefreshPublic();\nsetInterval(refreshPublic,15000);
