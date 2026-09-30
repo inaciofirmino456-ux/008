@@ -83,6 +83,6 @@ function render(data){
  const mobile=$('#mobileOrder');if(mobile){mobile.href='#';mobile.onclick=e=>{e.preventDefault();openCart()}}
  ensureCartModal();updateCartButton();fixImages();setupMotion();$('#year').textContent=new Date().getFullYear();
 }
-function fixImages(){document.querySelectorAll('img').forEach(img=>{img.addEventListener('error',()=>{if(img.dataset.fallbackApplied)return;img.dataset.fallbackApplied='1';img.src='https://wsrv.nl/?url=https%3A%2F%2Fvisitbraga.travel%2Fwp-content%2Fuploads%2F2025%2F07%2Fdferreira_2.webp&w=1400&q=88';img.classList.add('bad');if(img.parentElement)img.parentElement.classList.add('photo-failed')},{once:true})})}
+function fixImages(){document.querySelectorAll('img').forEach(img=>{img.addEventListener('error',()=>{if(img.dataset.fallbackApplied)return;img.dataset.fallbackApplied='1';img.src='https://www.airial.travel/_next/image?q=75&url=https%3A%2F%2Fmedia-cdn.tripadvisor.com%2Fmedia%2Fphoto-w%2F14%2F18%2F1c%2F58%2Fphoto7jpg.jpg&w=3840';img.classList.add('bad');if(img.parentElement)img.parentElement.classList.add('photo-failed')},{once:true})})}
 async function refreshPublic(){const data=await loadData();render(data)}\nrefreshPublic();
 setInterval(refreshPublic,15000);
