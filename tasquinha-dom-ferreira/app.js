@@ -49,7 +49,7 @@ function setupMotion(){
 }
 function render(data){
  DATA=data;const d=data.daily;
- $('#dailyContent').innerHTML='<div><div class="section-kicker" style="color:#f0c8bf">PRATO DO DIA</div><h2>'+d.name+'</h2><p>'+d.description+'</p><div class="daily-actions"><button class="btn" style="background:#f6f0e6;color:#8e2d20" type="button" id="dailyOrder">Pedir / contactar</button></div></div><div><div class="daily-price">'+(typeof d.price==='number'?money(d.price):d.price||'Consultar')+'</div><p>Atualizado pelo restaurante</p></div>';
+ $('#dailyContent').innerHTML='<div><div class="section-kicker" style="color:#f0c8bf">PRATO DO DIA</div><h2>'+d.name+'</h2><p>'+d.description+'</p><div class="daily-actions"><button class="btn" style="background:#f6f0e6;color:#8e2d20" type="button" id="dailyOrder">Pedir / contactar</button></div></div><div><div class="daily-price">Consultar</div><p>Contacte a Tasquinha para confirmar o prato e o preço.</p></div>';
  $('#dailyOrder').onclick=()=>addToCart({id:d.id||'daily',name:d.name,description:d.description,price:typeof d.price==='number'?d.price:0});
  $('#menuGrid').innerHTML=data.menu.map(c=>'<div class="menu-category"><h3>'+c.category+'</h3>'+c.items.map(i=>'<div class="dish"><div><strong>'+i.name+'</strong>'+(i.specialty?'<span class="specialty"> · Especialidade</span>':'')+'<p>'+i.description+'</p></div><div class="price">'+(typeof i.price==='number'?money(i.price):'Consultar')+(i.sold_out?'<small>Esgotado</small>':'')+(!i.sold_out?'<button class="add-btn" type="button" data-add="'+i.id+'">Adicionar</button>':'')+'</div></div>').join('')+'</div>').join('');
  data.menu.flatMap(c=>c.items).forEach(i=>{const b=document.querySelector('[data-add="'+i.id+'"]');if(b)b.onclick=()=>addToCart(i)});
