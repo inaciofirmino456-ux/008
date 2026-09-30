@@ -40,6 +40,13 @@ async function submitOrder(e){
   if(wa)setTimeout(()=>window.open(wa,'_blank','noopener'),300);
  }catch(err){$('#orderStatus').textContent='Não foi possível enviar o pedido. Tente novamente ou ligue para '+DATA.settings.phone+'.';console.error(err)}
 }
+function setupMotion(){
+ const targets=document.querySelectorAll('.hero-copy,.daily,.split,.menu-section,.feature,.gallery-section,.reviews,.contact,.history-strip');
+ targets.forEach(el=>el.classList.add('reveal-ready'));
+ if(!('IntersectionObserver' in window)){targets.forEach(el=>el.classList.add('revealed'));return}
+ const io=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('revealed');io.unobserve(e.target)}}),{threshold:.12});
+ targets.forEach(el=>io.observe(el));
+}
 function render(data){
  DATA=data;const d=data.daily;
  $('#dailyContent').innerHTML='<div><div class="section-kicker" style="color:#f0c8bf">PRATO DO DIA</div><h2>'+d.name+'</h2><p>'+d.description+'</p><div class="daily-actions"><button class="btn" style="background:#f6f0e6;color:#8e2d20" type="button" id="dailyOrder">Pedir / contactar</button></div></div><div><div class="daily-price">'+(typeof d.price==='number'?money(d.price):d.price||'Consultar')+'</div><p>Atualizado pelo restaurante</p></div>';
@@ -54,7 +61,7 @@ function render(data){
  const wa=waLink(data.settings.whatsapp,'Olá, gostaria de fazer uma reserva/pedido na Tasquinha Dom Ferreira.');if(wa){$('#whatsappLink').href=wa;$('#whatsappLink').classList.remove('hidden')}
  const map=$('.map-link');if(map&&data.settings.maps_url)map.href=data.settings.maps_url;
  const mobile=$('#mobileOrder');if(mobile){mobile.href='#';mobile.onclick=e=>{e.preventDefault();openCart()}}
- ensureCartModal();updateCartButton();fixImages();$('#year').textContent=new Date().getFullYear();
+ ensureCartModal();updateCartButton();fixImages();setupMotion();$('#year').textContent=new Date().getFullYear();
 }
 function fixImages(){document.querySelectorAll('img').forEach(img=>{img.addEventListener('error',()=>{img.classList.add('bad');if(img.parentElement)img.parentElement.classList.add('photo-failed')},{once:true})})}
 async function refreshPublic(){const data=await loadData();render(data)}\nrefreshPublic();\nsetInterval(refreshPublic,15000);
