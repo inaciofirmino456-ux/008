@@ -39,6 +39,37 @@ async function initAuth(){
   sb.auth.onAuthStateChange((_event,_session)=>{setTimeout(()=>session(),0);});
   await session();
 }
+async function loadAll(){
+  const [settings,categories,menu,daily,gallery,orders]=await Promise.all([
+    sb.from("restaurant_settings").select("*").limit(1).maybeSingle(),
+    sb.from("menu_categories").select("*").eq("active",true).order("sort_order"),
+    sb.from("menu_items").select("*").order("sort_order"),
+    sb.from("daily_dishes").select("*").order("dish_date",{ascending:false}),
+    sb.from("gallery").select("*").eq("active",true).order("sort_order",{ascending:false}),
+    sb.from("orders").select("*").order("created_at",{ascending:false})
+  ]);
+  for(const r of [settings,categories,menu,daily,gallery,orders]) if(r.error) throw r.error;
+  cats=categories.data||[];
+  items=menu.data||[];
+  const s=settings.data;
+  if(s){
+    $("#sName").value=s.name||"";
+    $("#sPhone").value=s.phone||"";
+    $("#sWhatsApp").value=s.whatsapp||"";
+    $("#sEmail").value=s.email||"";
+    $("#sAdminEmail").value=s.admin_email||"";
+    $("#sAddress").value=s.address||"";
+    $("#sMaps").value=s.maps_url||"";
+    $("#sHours").value=typeof s.hours==="string"?s.hours:JSON.stringify(s.hours||{},null,2);
+  }
+  const select=$("#iCategory");
+  if(select) select.innerHTML=cats.map(c=>"<option value='"+c.id+"'>"+c.name+"</option>").join("");
+  renderMenu();
+  renderDaily(daily.data||[]);
+  renderGallery(gallery.data||[]);
+  renderOrders(orders.data||[]);
+  await restoreAdminTab();
+}
 function renderMenu(){const html=cats.map(c=>"<h3>"+c.name+"</h3>"+items.filter(i=>i.category_id===c.id).map(i=>"<div class='item'><div><b>"+i.name+"</b><br>"+(i.price_cents==null?"Consultar":(i.price_cents/100).toFixed(2)+" €")+" "+(i.sold_out?"· ESGOTADO":"")+(i.is_specialty?" · ESPECIALIDADE":"")+"</div><button class='danger' onclick=\"removeItem('"+i.id+"')\">Apagar</button></div>").join("")).join("");$("#menuList").innerHTML=html||"<p>Sem pratos.</p>"}
 async function removeItem(id){if(!confirm("Apagar este prato?"))return;const r=await sb.from("menu_items").delete().eq("id",id);if(r.error)alert(r.error.message);else loadAll()}
 function renderDaily(rows){$("#dailyList").innerHTML=rows.length?rows.map(d=>"<div class='item'><div><b>"+d.dish_date+"</b> · "+d.name+"<br>"+(d.published?"Publicado":"Oculto")+"</div><button class='danger' onclick=\"deleteDaily('"+d.id+"')\">Apagar</button></div>").join(""):"<p>Sem pratos do dia.</p>"}
