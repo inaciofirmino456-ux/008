@@ -83,6 +83,29 @@ function render(data){
  const mobile=$('#mobileOrder');if(mobile){mobile.href='#';mobile.onclick=e=>{e.preventDefault();openCart()}}
  ensureCartModal();updateCartButton();fixImages();setupMotion();$('#year').textContent=new Date().getFullYear();
 }
-function fixImages(){document.querySelectorAll('img').forEach(img=>{img.addEventListener('error',()=>{if(img.dataset.fallbackApplied)return;img.dataset.fallbackApplied='1';img.src='https://www.airial.travel/_next/image?q=75&url=https%3A%2F%2Fmedia-cdn.tripadvisor.com%2Fmedia%2Fphoto-w%2F14%2F18%2F1c%2F58%2Fphoto7jpg.jpg&w=3840';img.classList.add('bad');if(img.parentElement)img.parentElement.classList.add('photo-failed')},{once:true})})}
+function fixImages(){
+ const fallbacks=[
+  'https://menu.restaurantguru.com/m8/Tasquinha-Dom-Ferreira-Braga-menu.jpg',
+  'https://media-cdn.tripadvisor.com/media/photo-w/14/18/1c/58/photo7jpg.jpg',
+  'https://media-cdn.tripadvisor.com/media/photo-w/27/42/7f/98/caption.jpg'
+ ];
+ document.querySelectorAll('img').forEach(img=>{
+  if(img.dataset.imageGuard)return;
+  img.dataset.imageGuard='1';
+  img.dataset.fallbackIndex='0';
+  const recover=()=>{
+   const n=Number(img.dataset.fallbackIndex||0)+1;
+   if(n<fallbacks.length){
+    img.dataset.fallbackIndex=String(n);
+    img.src=fallbacks[n];
+   }else{
+    img.classList.add('bad');
+    if(img.parentElement)img.parentElement.classList.add('photo-failed');
+   }
+  };
+  img.addEventListener('error',recover);
+  if(img.complete && img.naturalWidth===0) recover();
+ });
+}
 async function refreshPublic(){const data=await loadData();render(data)}\nrefreshPublic();
 setInterval(refreshPublic,15000);
