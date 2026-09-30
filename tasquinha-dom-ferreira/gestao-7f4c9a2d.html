@@ -4,7 +4,7 @@ const promptText='Melhora esta fotografia de comida para ser usada no site de um
 async function prepare(input){
  const file=input&&input.files&&input.files[0];
  if(!file){alert('Escolhe primeiro a foto do prato.');return;}
- if(!/^image\\/(jpeg|png|gif)$/.test(file.type) || file.size>20*1024*1024){alert('Escolhe uma imagem JPG, PNG ou GIF com até 20 MB.');return;}
+ if(!file.type || !file.type.startsWith('image/') || file.size>20*1024*1024){alert('Escolhe uma imagem com até 20 MB.');return;}
  // No Android, o caminho mais fiável para entregar a foto + prompt ao ChatGPT é o menu nativo de partilha.
  // O site não pode forçar uma aplicação externa a receber um ficheiro através de uma URL.
  if(navigator.share && navigator.canShare){
@@ -23,7 +23,15 @@ async function prepare(input){
  window.open('https://chatgpt.com/?q='+encodeURIComponent(promptText),'_blank','noopener,noreferrer');
  setTimeout(()=>alert('O ChatGPT foi aberto com o prompt. Se a foto não aparecer automaticamente, cola a foto na conversa. Depois guarda a foto melhorada, volta ao site e adiciona essa foto no campo do prato.'),300);
 }
-const wire=(choose,take,chat,gallery,camera)=>{document.getElementById(choose)?.addEventListener('click',()=>document.getElementById(gallery).click());document.getElementById(take)?.addEventListener('click',()=>document.getElementById(camera).click());document.getElementById(chat)?.addEventListener('click',()=>{const g=document.getElementById(gallery),cam=document.getElementById(camera);prepare(g.files[0]?g:cam.files[0]?cam:null);});};
+const wire=(choose,take,chat,gallery,camera)=>{
+ const g=document.getElementById(gallery), cam=document.getElementById(camera);
+ document.getElementById(choose)?.addEventListener('click',()=>g.click());
+ document.getElementById(take)?.addEventListener('click',()=>cam.click());
+ const useFile=(file)=>{ if(!file)return; try{ const dt=new DataTransfer(); dt.items.add(file); g.files=dt.files; }catch(e){} };
+ g?.addEventListener('change',()=>{if(g.files[0]) useFile(g.files[0]);});
+ cam?.addEventListener('change',()=>{if(cam.files[0]){useFile(cam.files[0]); alert('Foto capturada. Agora toca em “Preparar no ChatGPT”.');}});
+ document.getElementById(chat)?.addEventListener('click',()=>{ if(!g.files[0]){alert('Primeiro escolhe uma foto da galeria ou tira uma foto com a câmara.');return;} prepare(g); });
+};
 wire('iChoosePhoto','iTakePhoto','iChatGPTPhoto','iPhotoFile','iCameraFile');
 wire('dChoosePhoto','dTakePhoto','dChatGPTPhoto','dPhotoFile','dCameraFile');
 })();
