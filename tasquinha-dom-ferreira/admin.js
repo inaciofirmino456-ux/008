@@ -25,7 +25,7 @@ async function initAuth(){
         password:$("#loginPassword").value
       });
       if(error)throw error;
-      await initAuth();
+      await session();
     }catch(e){showLogin(e.message||"Email ou palavra-passe inválidos.");}
     finally{btn.disabled=false;btn.textContent="Entrar";}
   };
@@ -280,4 +280,4 @@ $("#aiChatSend").onclick=sendAiChat;
 $("#aiChatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendAiChat()}});
 addChatMessage("assistant","Olá! Sou o assistente da área do dono. Posso ajudar com o prato do dia, menu, fotografias e conteúdo do site.");
 
-session();
+initAuth();
