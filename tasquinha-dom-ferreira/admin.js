@@ -102,7 +102,7 @@ async function callAi(file,purpose,action){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),145000);
   try{
-    const {data,error}=await sb.functions.invoke("owner-chat",{
+    const {data,error}=await sb.functions.invoke("prepare-food-photo",{
       body:{image,purpose,action}
     });
     if(error)throw new Error(error.message||"Não foi possível contactar a IA.");
@@ -262,7 +262,7 @@ async function sendAiChat(){
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),90000);
     try{
-      const {data,error}=await sb.functions.invoke("prepare-food-photo",{
+      const {data,error}=await sb.functions.invoke("owner-chat",{
         body:{action:"chat",purpose:"daily",messages:chatMessages}
       });
       if(error)throw new Error(error.message||"Não foi possível contactar a IA.");
