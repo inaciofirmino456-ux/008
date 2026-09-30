@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://tasquinha-dom-ferreira.onrender.com/sitemap.xml
