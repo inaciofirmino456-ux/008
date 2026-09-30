@@ -4,15 +4,24 @@ const promptText='Melhora esta fotografia de comida para ser usada no site de um
 async function prepare(input){
  const file=input&&input.files&&input.files[0];
  if(!file){alert('Escolhe primeiro a foto do prato.');return;}
- try{
-   if(navigator.clipboard&&window.ClipboardItem){
-     const blob=file.type?file:new Blob([file],{type:'image/jpeg'});
-     try{ await navigator.clipboard.write([new ClipboardItem({[blob.type]:blob})]); }catch(e){}
-   }
- }catch(e){}
- const chatUrl='https://chatgpt.com/?q='+encodeURIComponent(promptText);
- window.open(chatUrl,'_blank','noopener,noreferrer');
- setTimeout(()=>alert('O ChatGPT foi aberto com o prompt preparado. A foto ficou pronta para ser adicionada na conversa. Depois de guardares a foto melhorada, volta ao site e adiciona essa foto no campo do prato.'),300);
+ if(!/^image\\/(jpeg|png|gif)$/.test(file.type) || file.size>20*1024*1024){alert('Escolhe uma imagem JPG, PNG ou GIF com até 20 MB.');return;}
+ // No Android, o caminho mais fiável para entregar a foto + prompt ao ChatGPT é o menu nativo de partilha.
+ // O site não pode forçar uma aplicação externa a receber um ficheiro através de uma URL.
+ if(navigator.share && navigator.canShare){
+   try{
+     const shareData={title:'Foto do prato — Tasquinha Dom Ferreira',text:promptText,files:[file]};
+     if(navigator.canShare({files:[file]})){
+       await navigator.share(shareData);
+       setTimeout(()=>alert('No ChatGPT, confirma a mensagem com a foto. Depois guarda a foto melhorada, volta ao site e adiciona essa foto no campo do prato.'),300);
+       return;
+     }
+   }catch(e){ if(e&&e.name==='AbortError') return; }
+ }
+ // Fallback: prepara o prompt no ChatGPT e deixa a foto copiada para colar.
+ try{if(navigator.clipboard&&window.ClipboardItem){const blob=file.type?file:new Blob([file],{type:'image/jpeg'});await navigator.clipboard.write([new ClipboardItem({[blob.type]:blob})]);}}catch(e){}
+ try{if(navigator.clipboard&&navigator.clipboard.writeText) await navigator.clipboard.writeText(promptText);}catch(e){}
+ window.open('https://chatgpt.com/?q='+encodeURIComponent(promptText),'_blank','noopener,noreferrer');
+ setTimeout(()=>alert('O ChatGPT foi aberto com o prompt. Se a foto não aparecer automaticamente, cola a foto na conversa. Depois guarda a foto melhorada, volta ao site e adiciona essa foto no campo do prato.'),300);
 }
 document.getElementById('iChatGPTPhoto')?.addEventListener('click',()=>prepare(document.getElementById('iPhotoFile')));
 document.getElementById('dChatGPTPhoto')?.addEventListener('click',()=>prepare(document.getElementById('dPhotoFile')));
