@@ -1,5 +1,44 @@
 const C=window.TASQUINHA_SUPABASE;const sb=window.supabase.createClient(C.url,C.key);const SITE_URL=(C.siteUrl||location.origin).replace(/\/$/,"");const AUTH_REDIRECT=`${SITE_URL}/gestao-7f4c9a2d.html`;const $=s=>document.querySelector(s);let cats=[],items=[];
-async function session(){ $("#panel").classList.remove("hidden"); await loadAll(); }
+async function session(){
+  const {data:{session},error}=await sb.auth.getSession();
+  if(error){showLogin("Não foi possível verificar a sessão.");return}
+  if(!session){showLogin();return}
+  $("#loginBox").classList.add("hidden");
+  $("#panel").classList.remove("hidden");
+  $("#logoutButton").classList.remove("hidden");
+  await loadAll();
+}
+function showLogin(message=""){
+  $("#panel").classList.add("hidden");
+  $("#logoutButton").classList.add("hidden");
+  $("#loginBox").classList.remove("hidden");
+  $("#loginError").textContent=message||"";
+}
+async function initAuth(){
+  $("#loginForm").onsubmit=async e=>{
+    e.preventDefault();
+    const btn=$("#loginButton"); btn.disabled=true; btn.textContent="A entrar…";
+    $("#loginError").textContent="";
+    try{
+      const {error}=await sb.auth.signInWithPassword({
+        email:$("#loginEmail").value.trim(),
+        password:$("#loginPassword").value
+      });
+      if(error)throw error;
+      await initAuth();
+    }catch(e){showLogin(e.message||"Email ou palavra-passe inválidos.");}
+    finally{btn.disabled=false;btn.textContent="Entrar";}
+  };
+  $("#recoverButton").onclick=async()=>{
+    const email=$("#loginEmail").value.trim();
+    if(!email)return $("#loginError").textContent="Indica o email do dono.";
+    const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:AUTH_REDIRECT});
+    $("#loginError").textContent=error?error.message:"Enviámos o email de recuperação.";
+  };
+  $("#logoutButton").onclick=async()=>{await sb.auth.signOut();showLogin("Sessão terminada.");};
+  sb.auth.onAuthStateChange((_event,_session)=>{setTimeout(()=>session(),0);});
+  await session();
+}
 function renderMenu(){const html=cats.map(c=>"<h3>"+c.name+"</h3>"+items.filter(i=>i.category_id===c.id).map(i=>"<div class='item'><div><b>"+i.name+"</b><br>"+(i.price_cents==null?"Consultar":(i.price_cents/100).toFixed(2)+" €")+" "+(i.sold_out?"· ESGOTADO":"")+(i.is_specialty?" · ESPECIALIDADE":"")+"</div><button class='danger' onclick=\"removeItem('"+i.id+"')\">Apagar</button></div>").join("")).join("");$("#menuList").innerHTML=html||"<p>Sem pratos.</p>"}
 async function removeItem(id){if(!confirm("Apagar este prato?"))return;const r=await sb.from("menu_items").delete().eq("id",id);if(r.error)alert(r.error.message);else loadAll()}
 function renderDaily(rows){$("#dailyList").innerHTML=rows.length?rows.map(d=>"<div class='item'><div><b>"+d.dish_date+"</b> · "+d.name+"<br>"+(d.published?"Publicado":"Oculto")+"</div><button class='danger' onclick=\"deleteDaily('"+d.id+"')\">Apagar</button></div>").join(""):"<p>Sem pratos do dia.</p>"}
@@ -63,16 +102,11 @@ async function callAi(file,purpose,action){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),145000);
   try{
-    const response=await fetch(C.url+"/functions/v1/prepare-food-photo",{
-      method:"POST",
-      headers:{"Content-Type":"text/plain;charset=UTF-8"},
-      body:JSON.stringify({image,purpose,action}),
-      signal:controller.signal
+    const {data,error}=await sb.functions.invoke("prepare-food-photo",{
+      body:{image,purpose,action}
     });
-    const text=await response.text();
-    let data={};
-    try{data=JSON.parse(text)}catch{}
-    if(!response.ok)throw new Error(data.error||("A IA respondeu com erro "+response.status+"."));
+    if(error)throw new Error(error.message||"Não foi possível contactar a IA.");
+    if(!data)throw new Error("A IA não devolveu resposta.");
     return data;
   }catch(e){
     if(e.name==="AbortError")throw new Error("A IA demorou demasiado tempo a responder. Tenta novamente com uma foto mais pequena.");
@@ -228,16 +262,11 @@ async function sendAiChat(){
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),90000);
     try{
-      const response=await fetch(C.url+"/functions/v1/prepare-food-photo",{
-        method:"POST",
-        headers:{"Content-Type":"text/plain;charset=UTF-8"},
-        body:JSON.stringify({action:"chat",messages:chatMessages}),
-        signal:controller.signal
+      const {data,error}=await sb.functions.invoke("prepare-food-photo",{
+        body:{action:"chat",purpose:"daily",messages:chatMessages}
       });
-      const text=await response.text();
-      let data={};try{data=JSON.parse(text)}catch{}
-      if(!response.ok)throw new Error(data.error||("A IA respondeu com erro "+response.status+"."));
-      if(!data.reply)throw new Error("A IA não devolveu uma resposta.");
+      if(error)throw new Error(error.message||"Não foi possível contactar a IA.");
+      if(!data?.reply)throw new Error("A IA não devolveu uma resposta.");
       addChatMessage("assistant",data.reply);
     }finally{clearTimeout(timer)}
   }catch(e){
